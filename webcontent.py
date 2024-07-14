@@ -26,10 +26,11 @@ Redistribution and use in source and binary forms, with or without
 
 from boilerpy3 import extractors
 import spacy
+import requests
 from spacy.lang.en import English
 from nltk.corpus import wordnet as wn
 import pandas as pd
-pd.set_option("max_columns", None)
+# pd.set_option("max_columns", None)
 from textblob import TextBlob
 
 # Use Spacy package model
@@ -39,18 +40,20 @@ parser = English()
 # Topic are the topics of interest - user should first decide which topics to be included for analysis
 topics = ["automotive", "travel", "science", "technology",
           "nature", "sports", "business", "beauty", "fashion", "music", "art",
-          "movie", "entertainment", "media", "children", "health", "gambling", 
+          "movie", "entertainment", "media", "children", "health", "gambling",
           "religion", "education", "politics", "history", "war", "news",
-          "food", "literature", "crime"]
+          "food", "literature", "crime", "analysis", "technical", "incident", "postmortem"]
 
 # Function for removing irrelevant parts of the extracted text
+
+
 def remove_trash(text, min_size=4):
     """
-    
+
     Your input is a string. The string will be parsed by the character
     '\n' and any resulting component under 4 words long will be discarded.
     Returns user input text cleaned.
-    
+
     Parameters
     ----------
     text : A string.
@@ -69,9 +72,11 @@ def remove_trash(text, min_size=4):
     return cleaned
 
 # Function for tokenising and lammetization of the relevant text
+
+
 def to_token(text):
     """
-    
+
     Your input is a string. The string will be stripped off anything that looks
     like tagging, hashtags, web links, punctuations, numbers and stop words.
     Then the words will be lemmatised.
@@ -90,23 +95,25 @@ def to_token(text):
     for token in tokens:
         if token.orth_.isspace():
             continue
-        elif token.like_url: #skip if looks like url
+        elif token.like_url:  # skip if looks like url
             continue
-        elif token.orth_.startswith('@'): #skip if looks like tag
+        elif token.orth_.startswith('@'):  # skip if looks like tag
             continue
-        elif token.orth_.startswith('#'): #skip if looks like tag
+        elif token.orth_.startswith('#'):  # skip if looks like tag
             continue
-        elif token.is_punct: #skip if looks like punctuation
+        elif token.is_punct:  # skip if looks like punctuation
             continue
-        elif token.like_num: #skip if looks like number
+        elif token.like_num:  # skip if looks like number
             continue
-        elif token.is_stop: #skip if looks like stop words
+        elif token.is_stop:  # skip if looks like stop words
             continue
         else:
             token_list.append(token.lower_)
-            
-        token_list = [wn.morphy(x) if wn.morphy(x) != None else x for x in token_list]
+
+        token_list = [wn.morphy(x) if wn.morphy(
+            x) != None else x for x in token_list]
     return token_list
+
 
 def sentiment(text):
     """
@@ -125,57 +132,68 @@ def sentiment(text):
     return TextBlob(text).sentiment
 
 # Function that takes url and topics (long string of single word topics separated by space) and return topic relevancy scores
-def classify_web(url, topics = topics, analyse_sentiment = False):
+
+
+def classify_web(url, topics=topics, analyse_sentiment=False):
     """
     This function enables users to take any url and return measures of topic
     similarity and sentiment analysis. The only required input is the url.
-    Topics can be customised by the user and is taken by the function as a 
+    Topics can be customised by the user and is taken by the function as a
     list of strings. If analyse_sentiment is set to true, the function will
     also return measures of polarity and subjectivity to the user.
 
     Parameters
     ----------
     url : A string.
-        
+
     topics : A list, optional
 
     analyse_sentiment : Boolean, optional
 
     Returns
     -------
-    A Pandas DataFrame containing topics similarity results and a 
+    A Pandas DataFrame containing topics similarity results and a
     textblob.en.sentiments.Sentiment object containing measures of polarity
     and subjectivity.
 
-    """    
+    """
     # Use boilerpy3 ArticleExtractor()
     extractor = extractors.ArticleExtractor()
-    
+
     # Extract content from web url
-    content = extractor.get_content_from_url(url)
-    
+    resp = requests.get(url)
+
+    # content = extractor.get_content_from_url(url)
+    content = extractor.get_content(resp.content.decode('utf-8'))
+
     # Join the tokens back up for Spacy nlp function
     token_join = ' '.join(to_token(remove_trash(content)))
-    
+
     # doc is the content
     doc = nlp(token_join)
-    
+
     # topics are the user defined topics
     topics = ' '.join(topics)
     topic = nlp(topics)
-    
+
     # Calculate similarity between content and topics
     topic_similarity = []
     for token in topic:
         topic_similarity.append(nlp(token_join).similarity(token))
-    
+
     # Calculate polarity (measure of positivity) and subjectivity
     senti_result = None
     if analyse_sentiment == True:
         senti_result = sentiment(content)
-    
+
     # Table to capture results
-    data = {'topics':topics.split(), 'similarity':topic_similarity}
-    result = pd.DataFrame(data=data).sort_values(['similarity'], ascending=[False]).reset_index(drop=True)
-    
-    return(result, senti_result)
+    data = {'topics': topics.split(), 'similarity': topic_similarity}
+    result = pd.DataFrame(data=data).sort_values(
+        ['similarity'], ascending=[False]).reset_index(drop=True)
+
+    return (result, senti_result)
+
+
+if __name__ == "__main__":
+    classify_web(
+        "https://blog.cloudflare.com/1-1-1-1-lookup-failures-on-october-4th-2023/")
