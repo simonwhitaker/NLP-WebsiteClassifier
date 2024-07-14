@@ -24,12 +24,13 @@ Redistribution and use in source and binary forms, with or without
     POSSIBILITY OF SUCH DAMAGE.
 """
 
-from boilerpy3 import extractors
-import spacy
-import requests
-from spacy.lang.en import English
-from nltk.corpus import wordnet as wn
 import pandas as pd
+import requests
+import spacy
+from boilerpy3 import extractors
+from nltk.corpus import wordnet as wn
+from spacy.lang.en import English
+
 # pd.set_option("max_columns", None)
 from textblob import TextBlob
 
@@ -38,11 +39,37 @@ nlp = spacy.load("en_core_web_md")
 parser = English()
 
 # Topic are the topics of interest - user should first decide which topics to be included for analysis
-topics = ["automotive", "travel", "science", "technology",
-          "nature", "sports", "business", "beauty", "fashion", "music", "art",
-          "movie", "entertainment", "media", "children", "health", "gambling",
-          "religion", "education", "politics", "history", "war", "news",
-          "food", "literature", "crime", "analysis", "technical", "incident", "postmortem"]
+topics = [
+    "automotive",
+    "travel",
+    "science",
+    "technology",
+    "nature",
+    "sports",
+    "business",
+    "beauty",
+    "fashion",
+    "music",
+    "art",
+    "movie",
+    "entertainment",
+    "media",
+    "children",
+    "health",
+    "gambling",
+    "religion",
+    "education",
+    "politics",
+    "history",
+    "war",
+    "news",
+    "food",
+    "literature",
+    "crime",
+    "analysis",
+    "incident",
+    "postmortem",
+]
 
 # Function for removing irrelevant parts of the extracted text
 
@@ -63,18 +90,19 @@ def remove_trash(text, min_size=4):
     cleaned : A string.
 
     """
-    cleaned = ''
-    for i in text.split('\n'):
+    cleaned = ""
+    for i in text.split("\n"):
         if len(i.split()) <= min_size:
             continue
         else:
-            cleaned += (i)
+            cleaned += i
     return cleaned
+
 
 # Function for tokenising and lammetization of the relevant text
 
 
-def to_token(text):
+def to_token(text) -> list[str]:
     """
 
     Your input is a string. The string will be stripped off anything that looks
@@ -90,16 +118,16 @@ def to_token(text):
     token_list : A list.
 
     """
-    token_list = []
+    token_list: list[str] = []
     tokens = parser(text)
     for token in tokens:
         if token.orth_.isspace():
             continue
         elif token.like_url:  # skip if looks like url
             continue
-        elif token.orth_.startswith('@'):  # skip if looks like tag
+        elif token.orth_.startswith("@"):  # skip if looks like tag
             continue
-        elif token.orth_.startswith('#'):  # skip if looks like tag
+        elif token.orth_.startswith("#"):  # skip if looks like tag
             continue
         elif token.is_punct:  # skip if looks like punctuation
             continue
@@ -110,8 +138,7 @@ def to_token(text):
         else:
             token_list.append(token.lower_)
 
-        token_list = [wn.morphy(x) if wn.morphy(
-            x) != None else x for x in token_list]
+        token_list = [str(wn.morphy(x)) if wn.morphy(x) else x for x in token_list]
     return token_list
 
 
@@ -130,6 +157,7 @@ def sentiment(text):
 
     """
     return TextBlob(text).sentiment
+
 
 # Function that takes url and topics (long string of single word topics separated by space) and return topic relevancy scores
 
@@ -164,36 +192,42 @@ def classify_web(url, topics=topics, analyse_sentiment=False):
     resp = requests.get(url)
 
     # content = extractor.get_content_from_url(url)
-    content = extractor.get_content(resp.content.decode('utf-8'))
+    content = extractor.get_content(resp.content.decode("utf-8"))
 
     # Join the tokens back up for Spacy nlp function
-    token_join = ' '.join(to_token(remove_trash(content)))
+    token_join = " ".join(to_token(remove_trash(content)))
 
     # doc is the content
     doc = nlp(token_join)
 
     # topics are the user defined topics
-    topics = ' '.join(topics)
+    topics = " ".join(topics)
     topic = nlp(topics)
 
     # Calculate similarity between content and topics
     topic_similarity = []
     for token in topic:
-        topic_similarity.append(nlp(token_join).similarity(token))
+        topic_similarity.append(doc.similarity(token))
 
     # Calculate polarity (measure of positivity) and subjectivity
     senti_result = None
-    if analyse_sentiment == True:
+    if analyse_sentiment:
         senti_result = sentiment(content)
 
     # Table to capture results
-    data = {'topics': topics.split(), 'similarity': topic_similarity}
-    result = pd.DataFrame(data=data).sort_values(
-        ['similarity'], ascending=[False]).reset_index(drop=True)
+    data = {"topics": topics.split(), "similarity": topic_similarity}
+    result = (
+        pd.DataFrame(data=data)
+        .sort_values(["similarity"], ascending=[False])
+        .reset_index(drop=True)
+    )
 
     return (result, senti_result)
 
 
 if __name__ == "__main__":
-    classify_web(
-        "https://blog.cloudflare.com/1-1-1-1-lookup-failures-on-october-4th-2023/")
+    print(
+        classify_web(
+            "https://wikitech.wikimedia.org/wiki/Incidents/2024-05-28_wikikube-api"
+        )
+    )
